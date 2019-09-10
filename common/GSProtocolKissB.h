@@ -33,6 +33,14 @@ enum TKBCltCommand_FromServer {
 	_bus_recv
 };
 
+enum TKBCltBusCmd {
+	_bcnone,
+	_sendmsg,
+	_sub,
+	_unsub,
+	_openchan,
+	_joinappspace
+};
 
 struct TGRIDProtocol_KB_ConnResp
 {
@@ -68,6 +76,15 @@ struct TGRIDProtocol_KB_SRV_PROCESS_SPL_API_RESPONSE
 		statusInfo = data.readString();
 		resultPayload = data.readMemoryStream();
 	};
+
+	void clear()
+	{
+		header = TKBCltCommand_FromServer::_kfnone;
+		status = false;
+		statusInfo = "";
+		if (resultPayload != NULL)
+			resultPayload->clear();
+	};
 };
 
 
@@ -84,6 +101,14 @@ struct TGRIDProtocol_KB_SRV_PROCESS_API_INFO
 	std::string GRIDArch;
 	std::string GRIDCompiler;
 
+	TGRIDProtocol_KB_SRV_PROCESS_API_INFO()
+	{
+	}
+
+	~TGRIDProtocol_KB_SRV_PROCESS_API_INFO()
+	{
+	}
+
 	void load(GSMemoryStream data)
 	{
 		data.seekStart();
@@ -97,6 +122,20 @@ struct TGRIDProtocol_KB_SRV_PROCESS_API_INFO
 		GRIDServices = data.readString(); //Delimited list.
 		GRIDArch = data.readString();
 		GRIDCompiler = data.readString();
+	}
+
+	void clear()
+	{
+		ServerGenuineName = "";
+		ServerHostCPUArchitecture = "";
+		ServerHostArchitecture = "";
+		ServerHostOS = "";
+		ServerHostOSBuild = "";
+		GRIDVersion = "";
+		GRIDServerName = "";
+		GRIDServices = ""; 
+		GRIDArch = "";
+		GRIDCompiler = "";
 	}
 };
 
@@ -164,7 +203,28 @@ public:
 		buf->writeByte(TKBCltCommand::_process_rpc_simple);
 		buf->writeString(commandID);
 		if (subCall != NULL)
+		{
+			buf->writeUint64(subCall->size());
 			buf->loadFromStream(subCall, false);
+		}
+		else
+			buf->writeUint64(0);
+		return buf;
+	}
+
+	GSMemoryStream* TGRIDProtocol_KB_CLT_BUS_CMD(const TKBCltBusCmd command, string channelInvolved, GSMemoryStream* MessageContent)
+	{
+		GSMemoryStream* buf = new(GSMemoryStream);
+		buf->writeByte(TKBCltCommand::_bus);
+		buf->writeByte(command);
+		buf->writeString(channelInvolved);
+		if (MessageContent != NULL)
+		{
+			buf->writeUint64(MessageContent->size());
+			buf->loadFromStream(MessageContent, false);
+		}
+		else
+			buf->writeUint64(0);
 		return buf;
 	}
 

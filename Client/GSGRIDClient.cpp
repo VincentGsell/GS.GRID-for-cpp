@@ -42,6 +42,9 @@ GSGRIDClient::~GSGRIDClient()
 {
 	delete Transport;
 	delete Protocol;
+
+	delete _INFO_API_CACHE;
+	delete _QUERYRESP;
 }
 
 
@@ -119,21 +122,69 @@ TGRIDProtocol_KB_SRV_PROCESS_API_INFO* GSGRIDClient::infos()
 	request = Protocol->TGRIDProtocol_KB_CLT_PROCESS_SPL_API(Protocol->CST_COMMANDID_GRID_API_SrvInfo, NULL);
 	Transport->send((char*)request->data(), request->size());
 	delete request;
-	Transport->receive((char*)localBuffer, &len);
 
-	receive.loadFromBuffer(localBuffer, len);
+	_INFO_API_CACHE->clear();
+	InternalGetCommandAndParse(true, TKBCltCommand_FromServer::_process_rpc_simple_srvinfo);
+	if (!_QUERYRESP->status)
+		throw _QUERYRESP->statusInfo;
+	return _INFO_API_CACHE;
 
-	TGRIDProtocol_KB_SRV_PROCESS_SPL_API_RESPONSE* a = new(TGRIDProtocol_KB_SRV_PROCESS_SPL_API_RESPONSE);
-	a->load(receive);
+}
 
-	TGRIDProtocol_KB_SRV_PROCESS_API_INFO* b = new(TGRIDProtocol_KB_SRV_PROCESS_API_INFO);
-	receive.clear();
-	receive.loadFromStream(a->resultPayload);
-	delete a;
-	
-	b->load(receive);
-	return b;
-};
+
+double GSGRIDClient::infoCPULevel()
+{
+	GSMemoryStream* request = new(GSMemoryStream);
+	request = Protocol->TGRIDProtocol_KB_CLT_PROCESS_SPL_API(Protocol->CST_COMMANDID_GRID_API_SrvInfoCpuLevel, NULL);
+	Transport->send((char*)request->data(), request->size());
+	delete request;
+
+	InternalGetCommandAndParse(true, TKBCltCommand_FromServer::_process_rpc_simple_srvinfocpulevel);
+	return _INFO_CPUVALUE;
+}
+
+string GSGRIDClient::instantPythonVersion()
+{
+	GSMemoryStream* request = new(GSMemoryStream);
+	request = Protocol->TGRIDProtocol_KB_CLT_PROCESS_SPL_API(Protocol->CST_COMMANDID_GRID_API_InstantPythonVersion, NULL);
+	Transport->send((char*)request->data(), request->size());
+	delete request;
+
+	InternalGetCommandAndParse(true, TKBCltCommand_FromServer::_process_rpc_simple_InstantPythonVersion);
+	return FSplProcessStep_PythonVersion;
+}
+
+string GSGRIDClient::instantPythonRun(string code)
+{
+	GSMemoryStream* request = new(GSMemoryStream);
+	GSMemoryStream* codeStream = new(GSMemoryStream);
+	codeStream->writeRawString(code);
+	request = Protocol->TGRIDProtocol_KB_CLT_PROCESS_SPL_API(Protocol->CST_COMMANDID_GRID_API_InstantPythonRun, codeStream);
+	Transport->send((char*)request->data(), request->size());
+	delete request;
+	delete codeStream;
+
+	InternalGetCommandAndParse(true, TKBCltCommand_FromServer::_process_rpc_simple_InstantPythonRun);
+	if (_QUERYRESP->status)
+		return FSplProcessStep_PythonRun;
+	else
+		return _QUERYRESP->statusInfo;
+}
+
+
+bool GSGRIDClient::internalSendMessage(const string channel, GSMemoryStream* payLoad)
+{
+	GSMemoryStream* mess = Protocol->TGRIDProtocol_KB_CLT_BUS_CMD(TKBCltBusCmd::_sendmsg, channel, payLoad);
+	uint32_t sended = Transport->send((char*)mess->data(), mess->size());
+	return (sended == mess->size());
+	delete mess;
+}
+
+bool GSGRIDClient::sendMessage(const string channel, GSMemoryStream* payLoad)
+{
+	return internalSendMessage(channel, payLoad);
+}
+
 
 
 void GSGRIDClient::InternalGetCommandAndParse(bool untilReachCommand,
@@ -149,31 +200,51 @@ void GSGRIDClient::InternalGetCommandAndParse(bool untilReachCommand,
 	receive.loadFromBuffer(localBuffer, len);
 
 	receive.seekStart();
-	TKBCltCommand_FromServer header = TKBCltCommand_FromServer(receive.readByte());
 
-	switch (header)
+	_QUERYRESP->clear();
+	_QUERYRESP->load(receive);
+	receive.clear();
+
+	if (_QUERYRESP->status)
 	{
-	case TKBCltCommand_FromServer::_connect_resp:;
-	case TKBCltCommand_FromServer::_connectup_resp:;
-	case TKBCltCommand_FromServer::_process_rpc_simple_srvinfo:;
-	case TKBCltCommand_FromServer::_process_rpc_simple_srvinfocpulevel:;
-	case TKBCltCommand_FromServer::_process_rpc_simple_KV:;
-	case TKBCltCommand_FromServer::_process_rpc_simple_InstantPythonVersion:;
-	case TKBCltCommand_FromServer::_process_rpc_simple_InstantPythonRun:;
-	default: throw "invalid protocol";
+		TKBCltCommand_FromServer header = TKBCltCommand_FromServer(_QUERYRESP->header);
+
+		switch (header)
+		{
+		case TKBCltCommand_FromServer::_connect_resp:break;
+		case TKBCltCommand_FromServer::_connectup_resp:break;
+		case TKBCltCommand_FromServer::_process_rpc_simple_srvinfo:
+		{
+			receive.loadFromStream(_QUERYRESP->resultPayload);
+			_INFO_API_CACHE->load(receive);
+			break;
+		};
+		case TKBCltCommand_FromServer::_process_rpc_simple_srvinfocpulevel:
+		{
+			receive.loadFromStream(_QUERYRESP->resultPayload);
+			receive.seekStart();
+			_INFO_CPUVALUE = receive.readDouble();
+			break;
+		};
+		case TKBCltCommand_FromServer::_process_rpc_simple_KV:break;
+		case TKBCltCommand_FromServer::_process_rpc_simple_InstantPythonVersion:
+		{
+			receive.loadFromStream(_QUERYRESP->resultPayload);
+			receive.seekStart();
+			FSplProcessStep_PythonVersion = receive.readRawString();
+			break;
+		};
+		case TKBCltCommand_FromServer::_process_rpc_simple_InstantPythonRun: 
+		{
+			receive.loadFromStream(_QUERYRESP->resultPayload);
+			receive.seekStart();
+			FSplProcessStep_PythonRun = receive.readRawString();
+			break; 
+		}
+		default: throw "protocol error" ;
+		}
+
 	}
-
+		
 }
-
-
-double GSGRIDClient::infoCPULevel()
-{
-	GSMemoryStream* request = new(GSMemoryStream);
-	request = Protocol->TGRIDProtocol_KB_CLT_PROCESS_SPL_API(Protocol->CST_COMMANDID_GRID_API_SrvInfoCpuLevel, NULL);
-	Transport->send((char*)request->data(), request->size());
-	delete request;
-
-	InternalGetCommandAndParse(true, TKBCltCommand_FromServer::_process_rpc_simple_srvinfocpulevel, 250);
-	return 0.0;
-};
 
