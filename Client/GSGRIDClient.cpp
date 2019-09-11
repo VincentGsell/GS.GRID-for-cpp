@@ -18,8 +18,6 @@
 #include "GSGRIDClient.h"
 
 
-
-
 std::string toUtf8(const std::wstring &str)
 {
 	std::string ret;
@@ -57,21 +55,19 @@ string GSGRIDClient::lastError()
 bool GSGRIDClient::connect(string IP, int port, string user, string password)
 {
 	bool response = false;
-	char localBuffer[1024];
 
 	//<---TGRIDProtocol_KB_SRV_NEGOCIATE_HALF_RESPONSE
 
 	uint32_t err;
-	uint32_t l;
 	if (Transport->connect(IP, port, &err))
 	{
 		GSMemoryStream* buf = Protocol->TGRIDProtocol_KB_CLT_NEGOCIATE();
 		Transport->send((char*)buf->data(), buf->size(), false);
 		delete buf;
 
-		Transport->receive((char*)localBuffer,&l);
 		GSMemoryStream received;
-		received.loadFromBuffer(localBuffer, l);
+		Transport->receive(received);
+		received.seekStart();
 		TGRIDProtocol_KB_ConnResp* a = Protocol->TGRIDProtocol_KB_CLT_NEGOCIATE_ServerResponse(received);
 		if (a->command == TKBCltCommand::_connect)
 		{
@@ -82,9 +78,7 @@ bool GSGRIDClient::connect(string IP, int port, string user, string password)
 				Transport->send((char*)buf->data(),buf->size());
 				delete buf;
 				
-				Transport->receive((char*)localBuffer,&l);
-				received.clear();
-				received.loadFromBuffer(localBuffer, l);
+				Transport->receive(received);
 				delete a;
 				a = Protocol->TGRIDProtocol_KB_CLT_NEGOCIATE_ServerResponse(received);
 				_lastError = a->statusError;
@@ -115,8 +109,7 @@ bool GSGRIDClient::connect(string IP, int port, string user, string password)
 TGRIDProtocol_KB_SRV_PROCESS_API_INFO* GSGRIDClient::infos()
 {
 	uint32_t  len;
-	char localBuffer[2048];
-	GSMemoryStream* request = new(GSMemoryStream);
+	GSMemoryStream* request;
 	GSMemoryStream receive;
 
 	request = Protocol->TGRIDProtocol_KB_CLT_PROCESS_SPL_API(Protocol->CST_COMMANDID_GRID_API_SrvInfo, NULL);
@@ -128,7 +121,6 @@ TGRIDProtocol_KB_SRV_PROCESS_API_INFO* GSGRIDClient::infos()
 	if (!_QUERYRESP->status)
 		throw _QUERYRESP->statusInfo;
 	return _INFO_API_CACHE;
-
 }
 
 
@@ -171,12 +163,43 @@ string GSGRIDClient::instantPythonRun(string code)
 		return _QUERYRESP->statusInfo;
 }
 
+bool GSGRIDClient::internalSubUnsub(const string channel, const bool subscribe)
+{
+	TKBCltCommand_FromServer lsSide;
+	GSMemoryStream* mess;
+	if (subscribe)
+	{
+		mess = Protocol->TGRIDProtocol_KB_CLT_BUS_CMD(TKBCltBusCmd::_sub, channel, NULL);
+		lsSide = TKBCltCommand_FromServer::_bus_sub;
+	}
+	else
+	{
+		mess = Protocol->TGRIDProtocol_KB_CLT_BUS_CMD(TKBCltBusCmd::_unsub, channel, NULL);
+		lsSide = TKBCltCommand_FromServer::_bus_unsub;
+	}
+	uint32_t sended = Transport->send((char*)mess->data(), mess->size());
+	delete mess;
+	InternalGetCommandAndParse(true, lsSide);
+	return (_QUERYRESP->status);
+}
+
+bool GSGRIDClient::subscribe(const string channel)
+{
+	return internalSubUnsub(channel, true);
+}
+
+bool GSGRIDClient::unsubscribe(const string channel)
+{
+	return internalSubUnsub(channel, false);
+}
+
 
 bool GSGRIDClient::internalSendMessage(const string channel, GSMemoryStream* payLoad)
 {
 	GSMemoryStream* mess = Protocol->TGRIDProtocol_KB_CLT_BUS_CMD(TKBCltBusCmd::_sendmsg, channel, payLoad);
 	uint32_t sended = Transport->send((char*)mess->data(), mess->size());
-	return (sended == mess->size());
+	//InternalGetCommandAndParse(true, lsSide); //No wait for return (fast), got it on checkmsg process.
+	return (sended > 0);
 	delete mess;
 }
 
@@ -185,20 +208,34 @@ bool GSGRIDClient::sendMessage(const string channel, GSMemoryStream* payLoad)
 	return internalSendMessage(channel, payLoad);
 }
 
+//To be called for example, in a (thread loop...)
+//true only if msg count>0
+bool GSGRIDClient::checkMsg(GSGRIDMessages& messages, uint32_t timeOut)
+{
+	InternalGetCommandAndParse(false, TKBCltCommand_FromServer::_kfnone, timeOut);
+	messages.resize(internalMessages.size());
+	for (int i(0); i < internalMessages.size(); i++)
+	{
+		messages[i].from = internalMessages[i].from;
+		messages[i].channel = internalMessages[i].channel;
+		messages[i].payload->loadFromStream(internalMessages[i].payload);
+		messages[i].ticks = internalMessages[i].ticks;
+	}
+	internalMessages.clear();
+	
+	return ((&messages != NULL)&&(messages.size() > 0));
+}
+
 
 
 void GSGRIDClient::InternalGetCommandAndParse(bool untilReachCommand,
 	TKBCltCommand_FromServer commandToReach,
 	uint32_t timeOut)
 {
-	uint32_t  len;
-	char localBuffer[2048];
 	GSMemoryStream receive;
-
-	Transport->receive((char*)localBuffer, &len);
-
-	receive.loadFromBuffer(localBuffer, len);
-
+	Transport->receive(receive,timeOut);
+	if (receive.size() == 0)
+		exit;
 	receive.seekStart();
 
 	_QUERYRESP->clear();
@@ -240,6 +277,33 @@ void GSGRIDClient::InternalGetCommandAndParse(bool untilReachCommand,
 			receive.seekStart();
 			FSplProcessStep_PythonRun = receive.readRawString();
 			break; 
+		}
+		case TKBCltCommand_FromServer::_bus_recv:
+		{
+			uint32_t messagesCount = receive.readUint32(); 
+			internalMessages.resize(messagesCount);
+			for (int i(0); i < internalMessages.size(); i++)
+			{
+				internalMessages[i].from = receive.readString();
+				internalMessages[i].channel = receive.readString();
+				internalMessages[i].payload->loadFromBuffer((char*)receive.data(),receive.size());
+				internalMessages[i].ticks = receive.readUint64();
+			}
+			throw 0; 
+			break;
+		}
+		case TKBCltCommand_FromServer::_bus_send:
+		{
+			//response from server about a previous send : work here for ack management.
+			break;
+		}
+		case TKBCltCommand_FromServer::_bus_sub:
+		{
+			break;
+		}
+		case TKBCltCommand_FromServer::_bus_unsub:
+		{
+			break;
 		}
 		default: throw "protocol error" ;
 		}

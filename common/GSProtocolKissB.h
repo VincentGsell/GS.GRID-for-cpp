@@ -68,7 +68,7 @@ struct TGRIDProtocol_KB_SRV_PROCESS_SPL_API_RESPONSE
 			delete resultPayload;
 	}
 
-	void load(GSMemoryStream data)
+	void load(GSMemoryStream& data)
 	{
 		data.seekStart();
 		header = TKBCltCommand_FromServer(data.readByte());
@@ -109,7 +109,7 @@ struct TGRIDProtocol_KB_SRV_PROCESS_API_INFO
 	{
 	}
 
-	void load(GSMemoryStream data)
+	void load(GSMemoryStream& data)
 	{
 		data.seekStart();
 		ServerGenuineName = data.readString();
@@ -185,7 +185,7 @@ public:
 		return buf;
 	}
 
-	TGRIDProtocol_KB_ConnResp* TGRIDProtocol_KB_CLT_NEGOCIATE_ServerResponse(GSMemoryStream buffer)
+	TGRIDProtocol_KB_ConnResp* TGRIDProtocol_KB_CLT_NEGOCIATE_ServerResponse(GSMemoryStream& buffer)
 	{
 		TGRIDProtocol_KB_ConnResp* a = new(TGRIDProtocol_KB_ConnResp);
 		buffer.seekStart();

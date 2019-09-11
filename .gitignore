@@ -44,3 +44,4 @@
 *.out
 *.db
 .vs
+solutions/VS/GRIDClientConsoleTest/GRIDClientConsoleTest/x64/Debug/gridclientconsoletest.obj.enc
