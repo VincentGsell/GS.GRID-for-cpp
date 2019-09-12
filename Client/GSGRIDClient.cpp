@@ -108,7 +108,6 @@ bool GSGRIDClient::connect(string IP, int port, string user, string password)
 
 TGRIDProtocol_KB_SRV_PROCESS_API_INFO* GSGRIDClient::infos()
 {
-	uint32_t  len;
 	GSMemoryStream* request;
 	GSMemoryStream receive;
 
@@ -180,7 +179,7 @@ bool GSGRIDClient::internalSubUnsub(const string channel, const bool subscribe)
 	uint32_t sended = Transport->send((char*)mess->data(), mess->size());
 	delete mess;
 	InternalGetCommandAndParse(true, lsSide);
-	return (_QUERYRESP->status);
+	return (_QUERYBUSRESP->status);
 }
 
 bool GSGRIDClient::subscribe(const string channel)
@@ -233,82 +232,101 @@ void GSGRIDClient::InternalGetCommandAndParse(bool untilReachCommand,
 	uint32_t timeOut)
 {
 	GSMemoryStream receive;
-	Transport->receive(receive,timeOut);
-	if (receive.size() == 0)
-		exit;
-	receive.seekStart();
+	bool _cond = true;
+	uint32_t npos = 0;
+	TKBCltCommand_FromServer serverHeader;
 
-	_QUERYRESP->clear();
-	_QUERYRESP->load(receive);
-	receive.clear();
-
-	if (_QUERYRESP->status)
+	do
 	{
-		TKBCltCommand_FromServer header = TKBCltCommand_FromServer(_QUERYRESP->header);
+		Transport->receive(receive, timeOut);
+		if (receive.size() == 0)
+			exit;
+		receive.seekStart();
 
-		switch (header)
+
+		do
 		{
-		case TKBCltCommand_FromServer::_connect_resp:break;
-		case TKBCltCommand_FromServer::_connectup_resp:break;
-		case TKBCltCommand_FromServer::_process_rpc_simple_srvinfo:
-		{
-			receive.loadFromStream(_QUERYRESP->resultPayload);
-			_INFO_API_CACHE->load(receive);
-			break;
-		};
-		case TKBCltCommand_FromServer::_process_rpc_simple_srvinfocpulevel:
-		{
-			receive.loadFromStream(_QUERYRESP->resultPayload);
-			receive.seekStart();
-			_INFO_CPUVALUE = receive.readDouble();
-			break;
-		};
-		case TKBCltCommand_FromServer::_process_rpc_simple_KV:break;
-		case TKBCltCommand_FromServer::_process_rpc_simple_InstantPythonVersion:
-		{
-			receive.loadFromStream(_QUERYRESP->resultPayload);
-			receive.seekStart();
-			FSplProcessStep_PythonVersion = receive.readRawString();
-			break;
-		};
-		case TKBCltCommand_FromServer::_process_rpc_simple_InstantPythonRun: 
-		{
-			receive.loadFromStream(_QUERYRESP->resultPayload);
-			receive.seekStart();
-			FSplProcessStep_PythonRun = receive.readRawString();
-			break; 
-		}
-		case TKBCltCommand_FromServer::_bus_recv:
-		{
-			uint32_t messagesCount = receive.readUint32(); 
-			internalMessages.resize(messagesCount);
-			for (int i(0); i < internalMessages.size(); i++)
+			npos = receive.seekpos();
+			serverHeader = TKBCltCommand_FromServer(receive.readByte());
+			receive.setPosition(npos);
+			_QUERYRESP->clear();
+
+			if (untilReachCommand)
+				if (_cond)
+					_cond = serverHeader != commandToReach;
+
+
+			switch (serverHeader)
 			{
-				internalMessages[i].from = receive.readString();
-				internalMessages[i].channel = receive.readString();
-				internalMessages[i].payload->loadFromBuffer((char*)receive.data(),receive.size());
-				internalMessages[i].ticks = receive.readUint64();
+				case TKBCltCommand_FromServer::_connect_resp:break;
+				case TKBCltCommand_FromServer::_connectup_resp:break;
+				case TKBCltCommand_FromServer::_process_rpc_simple_srvinfo:
+				{
+					_QUERYRESP->load(receive);
+					receive.loadFromStream(_QUERYRESP->resultPayload);
+					receive.seekStart();
+					_INFO_API_CACHE->load(receive);
+					break;
+				};
+				case TKBCltCommand_FromServer::_process_rpc_simple_srvinfocpulevel:
+				{
+					_QUERYRESP->load(receive);
+					receive.loadFromStream(_QUERYRESP->resultPayload);
+					receive.seekStart();
+					_INFO_CPUVALUE = receive.readDouble();
+					break;
+				};
+				case TKBCltCommand_FromServer::_process_rpc_simple_KV:break;
+				case TKBCltCommand_FromServer::_process_rpc_simple_InstantPythonVersion:
+				{
+					_QUERYRESP->load(receive);
+					receive.loadFromStream(_QUERYRESP->resultPayload);
+					receive.seekStart();
+					FSplProcessStep_PythonVersion = receive.readRawString();
+					break;
+				};
+				case TKBCltCommand_FromServer::_process_rpc_simple_InstantPythonRun:
+				{
+					_QUERYRESP->load(receive);
+					receive.loadFromStream(_QUERYRESP->resultPayload);
+					receive.seekStart();
+					FSplProcessStep_PythonRun = receive.readRawString();
+					break;
+				}
+				case TKBCltCommand_FromServer::_bus_recv:
+				{
+					_QUERYBUSRESP->load(receive);
+					uint32_t messagesCount = receive.readUint32();
+					internalMessages.resize(messagesCount);
+					for (int i(0); i < internalMessages.size(); i++)
+					{
+						internalMessages[i].from = receive.readString();
+						internalMessages[i].channel = receive.readString();
+						internalMessages[i].payload->loadFromBuffer((char*)receive.data(), receive.size());
+						internalMessages[i].ticks = receive.readUint64();
+					}
+					break;
+				}
+				case TKBCltCommand_FromServer::_bus_send:
+				{
+					_QUERYBUSRESP->load(receive);
+					//response from server about a previous send : work here for ack management.
+					break;
+				}
+				case TKBCltCommand_FromServer::_bus_sub:
+				{
+					_QUERYBUSRESP->load(receive);
+					break;
+				}
+				case TKBCltCommand_FromServer::_bus_unsub:
+				{
+					_QUERYBUSRESP->load(receive);
+					break;
+				}
+				default: throw "protocol error";
 			}
-			throw 0; 
-			break;
-		}
-		case TKBCltCommand_FromServer::_bus_send:
-		{
-			//response from server about a previous send : work here for ack management.
-			break;
-		}
-		case TKBCltCommand_FromServer::_bus_sub:
-		{
-			break;
-		}
-		case TKBCltCommand_FromServer::_bus_unsub:
-		{
-			break;
-		}
-		default: throw "protocol error" ;
-		}
-
-	}
+		} while (receive.seekpos()<receive.size());
+	} while (_cond);
 		
 }
 

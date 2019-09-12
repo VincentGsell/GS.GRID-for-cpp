@@ -41,6 +41,7 @@ class GSGRIDClient
 	protected:
 		TGRIDProtocol_KB_SRV_PROCESS_SPL_API_RESPONSE* _QUERYRESP = new(TGRIDProtocol_KB_SRV_PROCESS_SPL_API_RESPONSE);
 		TGRIDProtocol_KB_SRV_PROCESS_API_INFO* _INFO_API_CACHE = new(TGRIDProtocol_KB_SRV_PROCESS_API_INFO);
+		TGRIDProtocol_KB_SRV_BUS_CMD_RESPONSE* _QUERYBUSRESP = new(TGRIDProtocol_KB_SRV_BUS_CMD_RESPONSE);
 		std::string FSplProcessStep_PythonVersion = u8"";
 		std::string FSplProcessStep_PythonRun = u8"";
 		double _INFO_CPUVALUE = 0;

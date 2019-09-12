@@ -140,6 +140,20 @@ struct TGRIDProtocol_KB_SRV_PROCESS_API_INFO
 };
 
 
+struct TGRIDProtocol_KB_SRV_BUS_CMD_RESPONSE
+{
+	TKBCltCommand_FromServer header;
+	bool status;
+	string statusInfo;
+
+	void load(GSMemoryStream& data)
+	{
+		header = TKBCltCommand_FromServer(data.readByte());
+		status = (data.readByte() > 0);
+		statusInfo = data.readString();
+	};
+
+};
 
 class GSProtocolKissB :	public GSProtocol
 {
