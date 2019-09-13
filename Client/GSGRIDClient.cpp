@@ -217,6 +217,7 @@ bool GSGRIDClient::checkMsg(GSGRIDMessages& messages, uint32_t timeOut)
 	{
 		messages[i].from = internalMessages[i].from;
 		messages[i].channel = internalMessages[i].channel;
+
 		messages[i].payload->loadFromStream(internalMessages[i].payload);
 		messages[i].ticks = internalMessages[i].ticks;
 	}
@@ -238,15 +239,16 @@ void GSGRIDClient::InternalGetCommandAndParse(bool untilReachCommand,
 
 	do
 	{
+		receive.clear();
 		Transport->receive(receive, timeOut);
 		if (receive.size() == 0)
-			exit;
+			return;
 		receive.seekStart();
 
 
 		do
 		{
-			npos = receive.seekpos();
+			npos = receive.seekPos();
 			serverHeader = TKBCltCommand_FromServer(receive.readByte());
 			receive.setPosition(npos);
 			_QUERYRESP->clear();
@@ -297,12 +299,17 @@ void GSGRIDClient::InternalGetCommandAndParse(bool untilReachCommand,
 				{
 					_QUERYBUSRESP->load(receive);
 					uint32_t messagesCount = receive.readUint32();
-					internalMessages.resize(messagesCount);
-					for (int i(0); i < internalMessages.size(); i++)
+					uint32_t lc = internalMessages.size();
+					internalMessages.resize(lc+messagesCount);
+					for (int i(lc); i < internalMessages.size(); i++)
 					{
 						internalMessages[i].from = receive.readString();
 						internalMessages[i].channel = receive.readString();
-						internalMessages[i].payload->loadFromBuffer((char*)receive.data(), receive.size());
+
+						uint32_t cc = receive.size() - receive.seekPos() - sizeof(uint64_t);
+						GSMemoryStream* temp = receive.readMemoryStream(false, cc);
+						internalMessages[i].payload->loadFromStream(temp);
+						delete temp;
 						internalMessages[i].ticks = receive.readUint64();
 					}
 					break;
@@ -325,7 +332,7 @@ void GSGRIDClient::InternalGetCommandAndParse(bool untilReachCommand,
 				}
 				default: throw "protocol error";
 			}
-		} while (receive.seekpos()<receive.size());
+		} while (receive.seekPos()<receive.size());
 	} while (_cond);
 		
 }

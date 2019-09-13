@@ -28,6 +28,14 @@ struct GSGRIDMessage
 		ticks = 0;
 		payload = new(GSMemoryStream);
 	}
+	GSGRIDMessage(const GSGRIDMessage& source)
+	{
+		from = source.from;
+		channel = source.channel;
+		ticks = source.ticks;
+		payload = new(GSMemoryStream);
+		payload->loadFromStream(source.payload);
+	}
 	~GSGRIDMessage()
 	{ 
 		delete payload;
