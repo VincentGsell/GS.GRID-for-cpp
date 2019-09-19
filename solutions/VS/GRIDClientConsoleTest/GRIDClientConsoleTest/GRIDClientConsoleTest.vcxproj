@@ -72,11 +72,11 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>E:\DATA\2019_GRIDSYSTEM\Code\GS\cpp\GS.GRID\common;E:\DATA\2019_GRIDSYSTEM\Code\GS\cpp\GS.GRID\Client;E:\DATA\2019_GRIDSYSTEM\Code\GS\cpp\GS.GRID;E:\DATA\2019_GRIDSYSTEM\Code\GS\cpp\GS.Core;$(IncludePath)</IncludePath>
+    <IncludePath>E:\DATA\2019_GRIDSYSTEM\Code\GS\cpp\GS.GRID\common;E:\DATA\2019_GRIDSYSTEM\Code\GS\cpp\GS.GRID\Client;E:\DATA\2019_GRIDSYSTEM\Code\GS\cpp\GS.GRID;E:\DATA\2019_GRIDSYSTEM\Code\GS\cpp\GS.Core;E:\Code\freeglut\freeglut-MSVC-3.0.0-2.mp\freeglut\include\GL;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>E:\DATA\2019_GRIDSYSTEM\Code\GS\cpp\GS.GRID\common;E:\DATA\2019_GRIDSYSTEM\Code\GS\cpp\GS.GRID\Client;E:\DATA\2019_GRIDSYSTEM\Code\GS\cpp\GS.GRID;E:\DATA\2019_GRIDSYSTEM\Code\GS\cpp\GS.Core;$(IncludePath)</IncludePath>
+    <IncludePath>E:\DATA\2019_GRIDSYSTEM\Code\GS\cpp\GS.GRID\common;E:\DATA\2019_GRIDSYSTEM\Code\GS\cpp\GS.GRID\Client;E:\DATA\2019_GRIDSYSTEM\Code\GS\cpp\GS.GRID;E:\DATA\2019_GRIDSYSTEM\Code\GS\cpp\GS.Core;E:\Code\freeglut\freeglut-MSVC-3.0.0-2.mp\freeglut\include\GL;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
@@ -99,6 +99,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>E:\Code\freeglut\freeglut-MSVC-3.0.0-2.mp\freeglut\lib\freeglut.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -114,6 +115,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>E:\Code\freeglut\freeglut-MSVC-3.0.0-2.mp\freeglut\lib\freeglut.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">

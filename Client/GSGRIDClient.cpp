@@ -213,7 +213,7 @@ bool GSGRIDClient::checkMsg(GSGRIDMessages& messages, uint32_t timeOut)
 {
 	InternalGetCommandAndParse(false, TKBCltCommand_FromServer::_kfnone, timeOut);
 	messages.resize(internalMessages.size());
-	for (int i(0); i < internalMessages.size(); i++)
+	for (uint32_t i(0); i < internalMessages.size(); i++)
 	{
 		messages[i].from = internalMessages[i].from;
 		messages[i].channel = internalMessages[i].channel;
@@ -234,7 +234,7 @@ void GSGRIDClient::InternalGetCommandAndParse(bool untilReachCommand,
 {
 	GSMemoryStream receive;
 	bool _cond = true;
-	uint32_t npos = 0;
+	uint64_t npos = 0;
 	TKBCltCommand_FromServer serverHeader;
 
 	do
@@ -301,12 +301,12 @@ void GSGRIDClient::InternalGetCommandAndParse(bool untilReachCommand,
 					uint32_t messagesCount = receive.readUint32();
 					uint32_t lc = internalMessages.size();
 					internalMessages.resize(lc+messagesCount);
-					for (int i(lc); i < internalMessages.size(); i++)
+					for (uint32_t i(lc); i < internalMessages.size(); i++)
 					{
 						internalMessages[i].from = receive.readString();
 						internalMessages[i].channel = receive.readString();
 
-						uint32_t cc = receive.size() - receive.seekPos() - sizeof(uint64_t);
+						uint64_t cc = receive.size() - receive.seekPos() - sizeof(uint64_t);
 						GSMemoryStream* temp = receive.readMemoryStream(false, cc);
 						internalMessages[i].payload->loadFromStream(temp);
 						delete temp;
